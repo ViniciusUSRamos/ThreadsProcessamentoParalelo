@@ -13,19 +13,23 @@ public class Barbeiro implements Runnable {
 
     @Override public void run() {
         while (!Thread.currentThread().isInterrupted()) {
-            Cliente cliente = loja.aguardarCliente();
+            Cliente cliente = loja.aguardarCliente(id);
             if (cliente == null) return;
             try {
                 Log.evento("Barbeiro-" + id, "CORTE_INICIO", cliente.nome());
-                Thread.sleep(corteMs);
+                long inicioCorte = System.nanoTime();
+                try {
+                    Thread.sleep(corteMs);
+                } finally {
+                    loja.registrarAtendimento(id, System.nanoTime() - inicioCorte);
+                }
                 Log.evento("Barbeiro-" + id, "CORTE_FIM", cliente.nome());
-                long posAtiva = loja.pagar(cliente, id, pagamentoMs);
-                long ativo = corteMs * 1_000_000L + posAtiva;
-                loja.registrarAtendimento(cliente, id, ativo);
+                loja.pagar(cliente, id, pagamentoMs);
                 loja.confirmarPagamento(cliente);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 Log.evento("Barbeiro-" + id, "INTERRUPCAO", "Atendimento interrompido para " + cliente.nome());
+                loja.cancelarAtendimento(cliente);
                 return;
             }
         }

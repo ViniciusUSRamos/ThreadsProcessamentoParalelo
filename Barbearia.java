@@ -5,13 +5,14 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Barbearia {
-    static final int CAPACIDADE = 20;
-    static final int LUGARES_SOFA = 4;
+    static final int capacidade = 20;
+    static final int lugaresSofa = 4;
+    static final int quantidadeBarbeiros = 3;
     private final ReentrantLock lock = new ReentrantLock(true);
     private final Condition trabalhoDisponivel = lock.newCondition();
     private final Queue<Cliente> sofa = new ArrayDeque<>();
     private final Queue<Cliente> emPe = new ArrayDeque<>();
-    private final Semaphore vagas = new Semaphore(CAPACIDADE, true);
+    private final Semaphore vagas = new Semaphore(capacidade, true);
     private final Semaphore pos = new Semaphore(1, true);
     private final Estatisticas estatisticas = new Estatisticas();
     private int dentro;
@@ -37,26 +38,27 @@ public class Barbearia {
         try {
             cliente.setChegada(System.nanoTime());
             dentro++;
-            if (sofa.size() < LUGARES_SOFA) {
+            if (sofa.size() < lugaresSofa) {
                 cliente.sentouNoSofa(System.nanoTime());
                 sofa.add(cliente);
-                Log.evento(cliente.nome(), "ENTRADA_SOFA", "Lotação " + dentro + "/20");
+                Log.evento(cliente.nome(), "ENTRADA_SOFA", "Lotacao " + dentro + "/" + capacidade);
             } else {
                 cliente.comecouEsperaEmPe(System.nanoTime());
                 emPe.add(cliente);
-                Log.evento(cliente.nome(), "ESPERA_EM_PE", "Posição " + emPe.size() + "; lotação " + dentro + "/20");
+                Log.evento(cliente.nome(), "ESPERA_EM_PE", "Posicao " + emPe.size() + "; lotacao " + dentro + "/" + capacidade);
             }
             trabalhoDisponivel.signal();
         } finally { lock.unlock(); }
     }
 
-    Cliente aguardarCliente() {
+    Cliente aguardarCliente(int barbeiro) {
         lock.lock();
         try {
             while (sofa.isEmpty() && !encerrando) trabalhoDisponivel.awaitUninterruptibly();
             if (sofa.isEmpty() && encerrando) return null;
             Cliente cliente = sofa.remove();
             cliente.chamado(System.nanoTime());
+            Log.evento("Barbeiro-" + barbeiro, "CHAMADA", cliente.nome() + " chamado para Cadeira " + barbeiro);
             promoverProximo();
             return cliente;
         } finally { lock.unlock(); }
@@ -67,7 +69,7 @@ public class Barbearia {
         if (proximo != null) {
             proximo.promovidoDoChao(System.nanoTime());
             sofa.add(proximo);
-            Log.evento(proximo.nome(), "PROMOCAO", "Entrou no sofá; restam " + emPe.size() + " em pé");
+            Log.evento(proximo.nome(), "PROMOCAO", "Entrou no sofa; restam " + emPe.size() + " em pe");
         }
     }
 
@@ -82,11 +84,22 @@ public class Barbearia {
             Thread.sleep(duracaoMs);
             Log.evento("Barbeiro-" + barbeiro, "PAGAMENTO_FIM", "Cliente " + cliente.nome());
             return System.nanoTime() - inicio;
-        } finally { pos.release(); }
+        } finally {
+            registrarAtendimento(barbeiro, System.nanoTime() - inicio);
+            pos.release();
+        }
     }
 
-    void registrarAtendimento(Cliente c, int barbeiro, long atividadeNs) {
+    void registrarAtendimento(int barbeiro, long atividadeNs) {
         estatisticas.registrarAtividade(barbeiro, atividadeNs);
+    }
+
+    void cancelarAtendimento(Cliente cliente) {
+        lock.lock();
+        try {
+            cliente.cancelarAtendimento();
+            Log.evento(cliente.nome(), "ATENDIMENTO_CANCELADO", "Cliente liberado apos interrupcao do barbeiro");
+        } finally { lock.unlock(); }
     }
 
     void sair(Cliente cliente) {
@@ -96,7 +109,7 @@ public class Barbearia {
             vagas.release();
             cliente.finalizar(System.nanoTime());
             estatisticas.registrarSaida(cliente);
-            Log.evento(cliente.nome(), "SAIDA", "Lotação " + dentro + "/20");
+            Log.evento(cliente.nome(), "SAIDA", "Lotacao " + dentro + "/" + capacidade);
         } finally { lock.unlock(); }
     }
 

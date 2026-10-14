@@ -5,6 +5,7 @@ public class Cliente implements Runnable {
     private final Barbearia loja;
     private final Condition mudanca;
     private boolean pagamentoConcluido;
+    private boolean atendimentoCancelado;
     private long chegada;
     private long sentou;
     private long chamada;
@@ -23,15 +24,17 @@ public class Cliente implements Runnable {
     void sentouNoSofa(long t) { sentou = t; }
     void comecouEsperaEmPe(long t) { esperaEmPeNs = -t; }
     void promovidoDoChao(long t) { esperaEmPeNs += t; sentou = t; }
-    void chamado(long t) { chamada = t; Log.evento("Barbeiro", "CHAMADA", nome() + " chamado do sofá"); }
+    void chamado(long t) { chamada = t; }
     void registrarEsperaPos(long ns) { esperaPosNs = ns; }
     void pagamentoConcluido() { pagamentoConcluido = true; mudanca.signal(); }
+    void cancelarAtendimento() { atendimentoCancelado = true; pagamentoConcluido = true; mudanca.signal(); }
     boolean pagamentoFoiConcluido() { return pagamentoConcluido; }
+    boolean atendimentoFoiCancelado() { return atendimentoCancelado; }
     void finalizar(long t) { saida = t; }
-    long esperaEmPeMs() { return esperaEmPeNs / 1_000_000; }
-    long esperaSofaMs() { return Math.max(0, chamada - sentou) / 1_000_000; }
-    long esperaPosMs() { return esperaPosNs / 1_000_000; }
-    long permanenciaMs() { return Math.max(0, saida - chegada) / 1_000_000; }
+    long esperaEmPeNs() { return esperaEmPeNs; }
+    long esperaSofaNs() { return Math.max(0, chamada - sentou); }
+    long esperaPosNs() { return esperaPosNs; }
+    long permanenciaNs() { return Math.max(0, saida - chegada); }
 
     @Override public void run() {
         boolean entrou = false;
