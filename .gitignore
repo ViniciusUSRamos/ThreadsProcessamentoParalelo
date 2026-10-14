@@ -1,7 +1,0 @@
-
-*.class
-*.log
-*.ctxt
-out/
-bin/
-target/
